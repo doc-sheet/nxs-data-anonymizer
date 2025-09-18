@@ -1,7 +1,6 @@
 package relfilter
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/nixys/nxs-data-anonymizer/misc"
@@ -177,6 +176,11 @@ func TestLinkFilterApply(t *testing.T) {
 		t.Fatal("incorrect row len for table 1")
 	}
 
+	if r1.Values[1].V == nil {
+		t.Fatal("NULL cell value in table 1")
+	}
+	v1 := *r1.Values[1].V
+
 	// Fill table 2
 	testLinkFilterTable2Init(f)
 
@@ -192,7 +196,12 @@ func TestLinkFilterApply(t *testing.T) {
 		t.Fatal("incorrect row len for table 2")
 	}
 
-	if bytes.Compare(r1.Values[1].V, r2.Values[1].V) != 0 {
+	if r2.Values[1].V == nil {
+		t.Fatal("NULL cell value in table 2")
+	}
+	v2 := *r2.Values[1].V
+
+	if v1 != v2 {
 		t.Fatal("incorrect values for tables after filter apply")
 	}
 
@@ -275,11 +284,11 @@ func testFilterTableInit(f *Filter) {
 
 	// Add column `testColumn1` with value
 	f.ColumnAdd("testColumn1", "int")
-	f.ValueAdd([]byte("0"))
+	f.ValueAdd(stringPtr("0"))
 
 	// Add column `testColumn2` with value
 	f.ColumnAdd("testColumn2", "varchar(10)")
-	f.ValueAdd([]byte("a"))
+	f.ValueAdd(stringPtr("a"))
 }
 
 func testLinkFilterTable1Init(f *Filter) {
@@ -288,11 +297,11 @@ func testLinkFilterTable1Init(f *Filter) {
 
 	// Add column `testColumn1` with value
 	f.ColumnAdd("testColumn1", "int")
-	f.ValueAdd([]byte("1"))
+	f.ValueAdd(stringPtr("1"))
 
 	// Add column `testColumn2` with value
 	f.ColumnAdd("testColumn2", "varchar(100)")
-	f.ValueAdd([]byte("a"))
+	f.ValueAdd(stringPtr("a"))
 }
 
 func testLinkFilterTable2Init(f *Filter) {
@@ -301,9 +310,13 @@ func testLinkFilterTable2Init(f *Filter) {
 
 	// Add column `testColumn1` with value
 	f.ColumnAdd("testColumn1", "int")
-	f.ValueAdd([]byte("2"))
+	f.ValueAdd(stringPtr("2"))
 
 	// Add column `testColumn2` with value
 	f.ColumnAdd("testColumn2", "varchar(100)")
-	f.ValueAdd([]byte("a"))
+	f.ValueAdd(stringPtr("a"))
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

@@ -18,8 +18,13 @@ type TemplateData struct {
 	Variables map[string]string
 }
 
+type TemlateRes struct {
+	Value   []byte
+	DropRow bool
+}
+
 // TemplateExec makes message from given template `tpl` and data `d`
-func TemplateExec(tpl string, d any) ([]byte, bool, error) {
+func TemplateExec(tpl string, d any) (TemlateRes, error) {
 
 	var b bytes.Buffer
 
@@ -33,8 +38,8 @@ func TemplateExec(tpl string, d any) ([]byte, bool, error) {
 		t["null"] = func() string {
 			return null
 		}
-		t["isNull"] = func(v string) bool {
-			if v == null {
+		t["isNull"] = func(v *string) bool {
+			if v == nil {
 				return true
 			}
 			return false
@@ -46,29 +51,45 @@ func TemplateExec(tpl string, d any) ([]byte, bool, error) {
 		return t
 	}()).Parse(tpl)
 	if err != nil {
-		return []byte{}, false, err
+		return TemlateRes{}, err
 	}
 
 	err = t.Execute(&b, d)
 	if err != nil {
-		return []byte{}, false, err
+		return TemlateRes{}, err
 	}
 
 	// Return empty line if buffer is nil
 	if b.Bytes() == nil {
-		return []byte{}, false, nil
+		return TemlateRes{
+				Value:   []byte{},
+				DropRow: false,
+			},
+			nil
 	}
 
 	// Return nil if buffer is NULL (with special key)
-	if bytes.Compare(b.Bytes(), []byte(null)) == 0 {
-		return nil, false, nil
+	if bytes.Equal(b.Bytes(), []byte(null)) {
+		return TemlateRes{
+				Value:   nil,
+				DropRow: false,
+			},
+			nil
 	}
 
 	// Return `drop` value if buffer is DROP (with special key)
-	if bytes.Compare(b.Bytes(), []byte(drop)) == 0 {
-		return nil, true, nil
+	if bytes.Equal(b.Bytes(), []byte(drop)) {
+		return TemlateRes{
+				Value:   nil,
+				DropRow: true,
+			},
+			nil
 	}
 
 	// Return buffer content otherwise
-	return b.Bytes(), false, nil
+	return TemlateRes{
+			Value:   b.Bytes(),
+			DropRow: false,
+		},
+		nil
 }

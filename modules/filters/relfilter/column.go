@@ -30,21 +30,19 @@ func (c *columns) add(name string, rt string, pts [][]string, r *ColumnRuleOpts)
 
 	env := []string{fmt.Sprintf("%s=%s", envVarColumnTypeRAW, rt)}
 
-	if pts != nil {
-		for i, g := range pts {
-			for j, sg := range g {
+	for i, g := range pts {
+		for j, sg := range g {
 
-				if j == 0 {
-					env = append(
-						env,
-						fmt.Sprintf("%s%d=%s", envVarColumnTypeGroupPrefix, i, sg),
-					)
-				} else {
-					env = append(
-						env,
-						fmt.Sprintf("%s%d_%d=%s", envVarColumnTypeGroupPrefix, i, j-1, sg),
-					)
-				}
+			if j == 0 {
+				env = append(
+					env,
+					fmt.Sprintf("%s%d=%s", envVarColumnTypeGroupPrefix, i, sg),
+				)
+			} else {
+				env = append(
+					env,
+					fmt.Sprintf("%s%d_%d=%s", envVarColumnTypeGroupPrefix, i, j-1, sg),
+				)
 			}
 		}
 	}

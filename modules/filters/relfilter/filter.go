@@ -60,7 +60,7 @@ type Row struct {
 }
 
 type rules struct {
-	variables map[string]string
+	variables map[string]*string
 
 	tableRules       map[string]map[string]ColumnRuleOpts
 	defaultRules     map[string]ColumnRuleOpts
@@ -87,7 +87,7 @@ type tableData struct {
 }
 
 type rowValue struct {
-	V []byte
+	V *string
 }
 
 type linkValues struct {
@@ -96,7 +96,7 @@ type linkValues struct {
 	t map[string]map[string]any
 
 	// Map old:new values
-	v map[string][]byte
+	v map[string]*string
 
 	// Unique map
 	u map[string]any
@@ -125,7 +125,7 @@ type applyRule struct {
 	c  *column
 	i  int
 	cr ColumnRuleOpts
-	v  map[string][]byte
+	lv map[string]*string
 	u  map[string]any
 }
 
@@ -174,7 +174,7 @@ func Init(opts InitOpts) (*Filter, error) {
 		excpts[e] = nil
 	}
 
-	vars := make(map[string]string)
+	vars := make(map[string]*string)
 	for n, f := range opts.Variables {
 		v, _, err := execFilter(
 			execFilterOpts{
@@ -187,7 +187,7 @@ func Init(opts InitOpts) (*Filter, error) {
 		if err != nil {
 			return nil, fmt.Errorf("filter init: %w", err)
 		}
-		vars[n] = string(v)
+		vars[n] = v
 	}
 
 	lvs := []linkValues{}
@@ -196,7 +196,7 @@ func Init(opts InitOpts) (*Filter, error) {
 
 		lv := linkValues{
 			t: make(map[string]map[string]any),
-			v: make(map[string][]byte),
+			v: make(map[string]*string),
 			u: func() map[string]any {
 				if l.Rule.Unique {
 					return make(map[string]any)
@@ -281,10 +281,12 @@ func (filter *Filter) ColumnGetName(index int) string {
 	return filter.tableData.columns.getNameByIndex(index)
 }
 
-func (filter *Filter) ValueAdd(b []byte) {
+func (filter *Filter) ValueAdd(b *string) {
 	filter.tableData.values = append(
 		filter.tableData.values,
 		rowValue{
+			// TODO: Check ability to store `b` as values without copy
+			// string (for performance increase)
 			V: bcopy(b),
 		},
 	)
@@ -326,7 +328,7 @@ func (filter *Filter) Apply() error {
 							c:  c,
 							i:  i,
 							cr: l.r,
-							v:  l.v,
+							lv: l.v,
 							u:  l.u,
 						},
 					)
@@ -407,46 +409,54 @@ func (filter *Filter) applyRules(tname string, rls []applyRule) error {
 
 	valEnvGlob := []string{}
 	for n, v := range filter.rules.variables {
-		valEnvGlob = append(
-			valEnvGlob,
-			fmt.Sprintf("%s%s=%s", envVarGlobalPrefix, n, v),
-		)
+		if v != nil {
+			valEnvGlob = append(
+				valEnvGlob,
+				fmt.Sprintf("%s%s=%s", envVarGlobalPrefix, n, *v),
+			)
+		}
 	}
 
-	valOld := make(map[string]string)
+	valOld := make(map[string]*string)
 	valEnvOld := []string{}
 	for i, c := range filter.tableData.columns.cc {
-		valOld[c.n] = string(filter.tableData.values[i].V)
-		valEnvOld = append(
-			valEnvOld,
-			fmt.Sprintf("%s%s=%s", envVarColumnPrefix, c.n, string(filter.tableData.values[i].V)),
-		)
+
+		valOld[c.n] = filter.tableData.values[i].V
+
+		// Set env var only for columns with non-nil values
+		if filter.tableData.values[i].V != nil {
+			valEnvOld = append(
+				valEnvOld,
+				fmt.Sprintf("%s%s=%s", envVarColumnPrefix, c.n, *filter.tableData.values[i].V),
+			)
+		}
 	}
 
 	// Apply rule for each specified column
 	for _, r := range rls {
 
 		var (
-			v   []byte
+			v   *string
 			d   bool
 			err error
 		)
 
-		if r.v != nil {
+		if r.lv != nil {
 
 			// For linked columns
 
 			type tplData struct {
-				Variables map[string]string
+				Variables map[string]*string
 			}
 
 			td := tplData{
 				Variables: filter.rules.variables,
 			}
 
-			if e, b := r.v[string(valOld[r.c.n])]; b {
-				v = e
-			} else {
+			if vo := valOld[r.c.n]; vo == nil {
+
+				// If old value for this cell is NULL
+
 				v, d, err = filter.applyLinkFilter(r.c.n, r.cr, r.u, td, valEnvGlob)
 				if err != nil {
 					return fmt.Errorf("rules: %w", err)
@@ -456,16 +466,32 @@ func (filter *Filter) applyRules(tname string, rls []applyRule) error {
 					filter.tableData.values = nil
 					return nil
 				}
+			} else {
 
-				r.v[string(valOld[r.c.n])] = v
+				// Check linked value for this column already exist
+				if e, b := r.lv[*vo]; b {
+					v = e
+				} else {
+					v, d, err = filter.applyLinkFilter(r.c.n, r.cr, r.u, td, valEnvGlob)
+					if err != nil {
+						return fmt.Errorf("rules: %w", err)
+					}
+
+					if d {
+						filter.tableData.values = nil
+						return nil
+					}
+
+					r.lv[*vo] = v
+				}
 			}
 		} else {
 
 			type tplData struct {
 				TableName        string
 				CurColumnName    string
-				Values           map[string]string
-				Variables        map[string]string
+				Values           map[string]*string
+				Variables        map[string]*string
 				ColumnTypeRaw    string
 				ColumnTypeGroups [][]string
 			}
@@ -506,7 +532,7 @@ func (filter *Filter) applyRules(tname string, rls []applyRule) error {
 	return nil
 }
 
-func (filter *Filter) applyColumnFilter(cn string, cr ColumnRuleOpts, td any, tde []string) ([]byte, bool, error) {
+func (filter *Filter) applyColumnFilter(cn string, cr ColumnRuleOpts, td any, tde []string) (*string, bool, error) {
 
 	for i := 0; i < uniqueAttempts; i++ {
 
@@ -518,11 +544,15 @@ func (filter *Filter) applyColumnFilter(cn string, cr ColumnRuleOpts, td any, td
 			td,
 			tde)
 		if err != nil {
-			return []byte{}, false, fmt.Errorf("apply filter: %w", err)
+			return nil, false, fmt.Errorf("apply filter: %w", err)
 		}
 
 		if d {
-			return []byte{}, true, nil
+			return nil, true, nil
+		}
+
+		if v == nil {
+			return nil, false, nil
 		}
 
 		if cr.Unique == false {
@@ -537,17 +567,17 @@ func (filter *Filter) applyColumnFilter(cn string, cr ColumnRuleOpts, td any, td
 			uv = filter.tableData.uniques[cn]
 		}
 
-		if _, b := uv[string(v)]; b == false {
-			uv[string(v)] = nil
+		if _, b := uv[*v]; b == false {
+			uv[*v] = nil
 			filter.tableData.uniques[cn] = uv
 			return v, false, nil
 		}
 	}
 
-	return []byte{}, false, fmt.Errorf("filter: unable to generate unique value for column `%s.%s`, check filter value for this column in config", filter.tableData.name, cn)
+	return nil, false, fmt.Errorf("filter: unable to generate unique value for column `%s.%s`, check filter value for this column in config", filter.tableData.name, cn)
 }
 
-func (filter *Filter) applyLinkFilter(cn string, cr ColumnRuleOpts, u map[string]any, td any, tde []string) ([]byte, bool, error) {
+func (filter *Filter) applyLinkFilter(cn string, cr ColumnRuleOpts, u map[string]any, td any, tde []string) (*string, bool, error) {
 
 	for i := 0; i < uniqueAttempts; i++ {
 
@@ -559,24 +589,28 @@ func (filter *Filter) applyLinkFilter(cn string, cr ColumnRuleOpts, u map[string
 			td,
 			tde)
 		if err != nil {
-			return []byte{}, false, fmt.Errorf("apply link filter: %w", err)
+			return nil, false, fmt.Errorf("apply link filter: %w", err)
 		}
 
 		if d {
-			return []byte{}, true, nil
+			return nil, true, nil
+		}
+
+		if v == nil {
+			return nil, false, nil
 		}
 
 		if cr.Unique == false {
 			return v, false, nil
 		}
 
-		if _, b := u[string(v)]; b == false {
-			u[string(v)] = nil
+		if _, b := u[*v]; b == false {
+			u[*v] = nil
 			return v, false, nil
 		}
 	}
 
-	return []byte{}, false, fmt.Errorf("apply link filter: unable to generate unique value for column `%s.%s`, check filter value for this column in config", filter.tableData.name, cn)
+	return nil, false, fmt.Errorf("apply link filter: unable to generate unique value for column `%s.%s`, check filter value for this column in config", filter.tableData.name, cn)
 }
 
 // rowCleanup cleanups current row values
@@ -584,30 +618,35 @@ func (filter *Filter) rowCleanup() {
 	filter.tableData.values = []rowValue{}
 }
 
-// bcopy makes a bytes copy
-func bcopy(b []byte) []byte {
-
+// bcopy makes a copy
+func bcopy(b *string) *string {
 	if b == nil {
 		return nil
 	}
-
-	d := make([]byte, len(b))
-	copy(d, b)
-
-	return d
+	d := *b
+	return &d
 }
 
-func execFilter(f execFilterOpts, td any, tde []string) (v []byte, d bool, err error) {
+func execFilter(f execFilterOpts, td any, tde []string) (*string, bool, error) {
+
+	var (
+		r   []byte
+		d   bool
+		err error
+	)
 
 	switch f.t {
 	case misc.ValueTypeTemplate:
-		v, d, err = misc.TemplateExec(
+		var t misc.TemlateRes
+		t, err = misc.TemplateExec(
 			f.v,
 			td,
 		)
 		if err != nil {
-			return []byte{}, false, fmt.Errorf("filter: value compile template: %w", err)
+			return nil, false, fmt.Errorf("filter: value compile template: %w", err)
 		}
+		r = t.Value
+		d = t.DropRow
 	case misc.ValueTypeCommand:
 
 		var stderr, stdout bytes.Buffer
@@ -626,17 +665,24 @@ func execFilter(f execFilterOpts, td any, tde []string) (v []byte, d bool, err e
 
 			e, b := err.(*exec.ExitError)
 			if b == false {
-				return []byte{}, false, fmt.Errorf("filter: value exec command: %w", err)
+				return nil, false, fmt.Errorf("filter: value exec command: %w", err)
 			}
 
-			return []byte{}, false, fmt.Errorf("filter: value exec command: bad exit code %d: %s", e.ExitCode(), stderr.String())
+			return nil, false, fmt.Errorf("filter: value exec command: bad exit code %d: %s", e.ExitCode(), stderr.String())
 		}
 
-		v = stdout.Bytes()
+		r = stdout.Bytes()
 
 	default:
-		return []byte{}, false, fmt.Errorf("filter: value compile: unknown type")
+		return nil, false, fmt.Errorf("filter: value compile: unknown type")
 	}
 
-	return bytes.ReplaceAll(v, []byte("\n"), []byte("\\n")), d, nil
+	if r == nil {
+		return nil, d, nil
+	}
+
+	r = bytes.ReplaceAll(r, []byte("\n"), []byte("\\n"))
+
+	s := string(r)
+	return &s, d, nil
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"syscall"
 
@@ -14,7 +15,7 @@ import (
 
 func main() {
 
-	err := appctx.Init(nil).
+	err := appctx.Init(context.Background()).
 		RoutinesSet(
 			map[string]appctx.RoutineParam{
 				"anonymizer": {
