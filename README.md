@@ -324,7 +324,7 @@ To anonymize a database fields you may use a commands (scripts or binaries) with
   - `ENVVARTABLE`: contains a name of the current table
   - `ENVVARCURCOLUMN`: contains the current column name
   - `ENVVARCOLUMN_{COLUMN_NAME}`: contains values (before substitutions) for all columns for the current row
-  - `ENVVARGLOBAL_{VARIABLE_NAME}`: contains value for specified global variable. Env variable will not be created if function `{{ null }}` is used in `value` template
+  - `ENVVARGLOBAL_{VARIABLE_NAME}`: contains value for specified global variable
   - `ENVVARCOLUMNTYPERAW`: contains raw column data type
   - `ENVVARCOLUMNTYPEGROUP_{GROUP_NUM}_{SUBGROUPNUM}`: contains regex's capturing groups for the column data type. See [Types](#types-settings) for details
 

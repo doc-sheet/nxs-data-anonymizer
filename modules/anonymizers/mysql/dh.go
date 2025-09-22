@@ -166,9 +166,9 @@ func dhCreateTableValues(usrCtx any, deferred, token []byte) ([]byte, error) {
 
 	s := string(deferred)
 	if s == "NULL" {
-		uctx.filter.ValueAdd(nil)
+		uctx.filter.ValueAdd(misc.TemplateNULL)
 	} else {
-		uctx.filter.ValueAdd(&s)
+		uctx.filter.ValueAdd(s)
 	}
 
 	return []byte{}, nil
@@ -183,7 +183,7 @@ func dhCreateTableValuesString(usrCtx any, deferred, token []byte) ([]byte, erro
 	}
 
 	s := string(deferred)
-	uctx.filter.ValueAdd(&s)
+	uctx.filter.ValueAdd(s)
 
 	return []byte{}, nil
 }
@@ -198,9 +198,9 @@ func dhCreateTableValuesEnd(usrCtx any, deferred, token []byte) ([]byte, error) 
 
 	s := string(deferred)
 	if s == "NULL" {
-		uctx.filter.ValueAdd(nil)
+		uctx.filter.ValueAdd(misc.TemplateNULL)
 	} else {
-		uctx.filter.ValueAdd(&s)
+		uctx.filter.ValueAdd(s)
 	}
 
 	// Apply filter for row
@@ -266,16 +266,16 @@ func rowDataGen(uctx *userCtx) []byte {
 			out += ","
 		}
 
-		if v.V == nil {
+		if v.V == misc.TemplateNULL {
 			out += "NULL"
 		} else {
 			switch uctx.tables[uctx.filter.TableNameGet()][uctx.filter.ColumnGetName(i)] {
 			case columnTypeString:
-				out += fmt.Sprintf("'%s'", *v.V)
+				out += fmt.Sprintf("'%s'", v.V)
 			case columnTypeBinary:
-				out += fmt.Sprintf("_binary '%s'", *v.V)
+				out += fmt.Sprintf("_binary '%s'", v.V)
 			default:
-				out += fmt.Sprintf("%s", *v.V)
+				out += fmt.Sprintf("%s", v.V)
 			}
 		}
 	}

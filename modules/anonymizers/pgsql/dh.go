@@ -144,9 +144,9 @@ func dhValue(usrCtx any, deferred, token []byte) ([]byte, error) {
 
 	s := string(deferred)
 	if s == "\\N" {
-		uctx.filter.ValueAdd(nil)
+		uctx.filter.ValueAdd(misc.TemplateNULL)
 	} else {
-		uctx.filter.ValueAdd(&s)
+		uctx.filter.ValueAdd(s)
 	}
 
 	return []byte{}, nil
@@ -162,9 +162,9 @@ func dhValueEnd(usrCtx any, deferred, token []byte) ([]byte, error) {
 
 	s := string(deferred)
 	if s == "\\N" {
-		uctx.filter.ValueAdd(nil)
+		uctx.filter.ValueAdd(misc.TemplateNULL)
 	} else {
-		uctx.filter.ValueAdd(&s)
+		uctx.filter.ValueAdd(s)
 	}
 
 	// Apply filter for row
@@ -200,14 +200,14 @@ func rowDataGen(filter *relfilter.Filter) []byte {
 			out += "\t"
 		}
 
-		if v.V == nil {
+		if v.V == misc.TemplateNULL {
 			out += "\\N"
 		} else {
-			out += fmt.Sprintf("%s", *v.V)
+			out += fmt.Sprintf("%s", v.V)
 		}
 	}
 
-	return []byte(fmt.Sprintf("%s\n", out))
+	return fmt.Appendf([]byte(out), "\n")
 }
 
 // SecurityPolicyCheck checks the table passes the security rules

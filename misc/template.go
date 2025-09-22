@@ -8,18 +8,12 @@ import (
 )
 
 var (
-	null = "::NULL::"
-	drop = "::DROP::"
+	TemplateNULL = "::NULL::"
+	TemplateDrop = "::DROP::"
 )
 
-type TemplateData struct {
-	TableName string
-	Values    map[string][]byte
-	Variables map[string]string
-}
-
 type TemlateRes struct {
-	Value   []byte
+	Value   string
 	DropRow bool
 }
 
@@ -36,16 +30,16 @@ func TemplateExec(tpl string, d any) (TemlateRes, error) {
 
 		// Add additional functions
 		t["null"] = func() string {
-			return null
+			return TemplateNULL
 		}
-		t["isNull"] = func(v *string) bool {
-			if v == nil {
+		t["isNull"] = func(v string) bool {
+			if v == TemplateNULL {
 				return true
 			}
 			return false
 		}
 		t["drop"] = func() string {
-			return drop
+			return TemplateDrop
 		}
 
 		return t
@@ -62,25 +56,16 @@ func TemplateExec(tpl string, d any) (TemlateRes, error) {
 	// Return empty line if buffer is nil
 	if b.Bytes() == nil {
 		return TemlateRes{
-				Value:   []byte{},
-				DropRow: false,
-			},
-			nil
-	}
-
-	// Return nil if buffer is NULL (with special key)
-	if bytes.Equal(b.Bytes(), []byte(null)) {
-		return TemlateRes{
-				Value:   nil,
+				Value:   "",
 				DropRow: false,
 			},
 			nil
 	}
 
 	// Return `drop` value if buffer is DROP (with special key)
-	if bytes.Equal(b.Bytes(), []byte(drop)) {
+	if bytes.Equal(b.Bytes(), []byte(TemplateDrop)) {
 		return TemlateRes{
-				Value:   nil,
+				Value:   "",
 				DropRow: true,
 			},
 			nil
@@ -88,7 +73,7 @@ func TemplateExec(tpl string, d any) (TemlateRes, error) {
 
 	// Return buffer content otherwise
 	return TemlateRes{
-			Value:   b.Bytes(),
+			Value:   b.String(),
 			DropRow: false,
 		},
 		nil

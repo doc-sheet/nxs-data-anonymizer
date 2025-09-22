@@ -19,7 +19,7 @@ func TestExecFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal("`drop` function:", err)
 	}
-	if v != nil || d == false {
+	if v != "" || d == false {
 		t.Fatal("`drop` function: incorrect return value")
 	}
 	t.Logf("`drop` function: success")
@@ -35,7 +35,7 @@ func TestExecFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal("`null` function:", err)
 	}
-	if v != nil || d == true {
+	if v != misc.TemplateNULL || d == true {
 		t.Fatal("`null` function: incorrect return value")
 	}
 	t.Logf("`null` function: success")
@@ -111,7 +111,7 @@ func TestFilterApplyNullFunction(t *testing.T) {
 	// Get row values
 	r := f.ValuePop()
 
-	if len(r.Values) < 2 || r.Values[0].V != nil {
+	if len(r.Values) < 2 || r.Values[0].V != misc.TemplateNULL {
 		t.Fatal("`null` function: unexpected behaviour")
 	}
 	t.Logf("`null` function: success")
@@ -176,10 +176,10 @@ func TestLinkFilterApply(t *testing.T) {
 		t.Fatal("incorrect row len for table 1")
 	}
 
-	if r1.Values[1].V == nil {
+	if r1.Values[1].V == misc.TemplateNULL {
 		t.Fatal("NULL cell value in table 1")
 	}
-	v1 := *r1.Values[1].V
+	v1 := r1.Values[1].V
 
 	// Fill table 2
 	testLinkFilterTable2Init(f)
@@ -196,10 +196,10 @@ func TestLinkFilterApply(t *testing.T) {
 		t.Fatal("incorrect row len for table 2")
 	}
 
-	if r2.Values[1].V == nil {
+	if r2.Values[1].V == misc.TemplateNULL {
 		t.Fatal("NULL cell value in table 2")
 	}
-	v2 := *r2.Values[1].V
+	v2 := r2.Values[1].V
 
 	if v1 != v2 {
 		t.Fatal("incorrect values for tables after filter apply")
@@ -284,11 +284,11 @@ func testFilterTableInit(f *Filter) {
 
 	// Add column `testColumn1` with value
 	f.ColumnAdd("testColumn1", "int")
-	f.ValueAdd(stringPtr("0"))
+	f.ValueAdd("0")
 
 	// Add column `testColumn2` with value
 	f.ColumnAdd("testColumn2", "varchar(10)")
-	f.ValueAdd(stringPtr("a"))
+	f.ValueAdd("a")
 }
 
 func testLinkFilterTable1Init(f *Filter) {
@@ -297,11 +297,11 @@ func testLinkFilterTable1Init(f *Filter) {
 
 	// Add column `testColumn1` with value
 	f.ColumnAdd("testColumn1", "int")
-	f.ValueAdd(stringPtr("1"))
+	f.ValueAdd("1")
 
 	// Add column `testColumn2` with value
 	f.ColumnAdd("testColumn2", "varchar(100)")
-	f.ValueAdd(stringPtr("a"))
+	f.ValueAdd("a")
 }
 
 func testLinkFilterTable2Init(f *Filter) {
@@ -310,13 +310,9 @@ func testLinkFilterTable2Init(f *Filter) {
 
 	// Add column `testColumn1` with value
 	f.ColumnAdd("testColumn1", "int")
-	f.ValueAdd(stringPtr("2"))
+	f.ValueAdd("2")
 
 	// Add column `testColumn2` with value
 	f.ColumnAdd("testColumn2", "varchar(100)")
-	f.ValueAdd(stringPtr("a"))
-}
-
-func stringPtr(s string) *string {
-	return &s
+	f.ValueAdd("a")
 }
